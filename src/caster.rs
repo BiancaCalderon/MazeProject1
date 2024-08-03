@@ -22,8 +22,8 @@ pub fn cast_ray(
         let cos = d * a.cos();
         let sin = d * a.sin();
 
-        let x = (player.pos.x * cos) as usize;
-        let y = (player.pos.y * cos) as usize;
+        let x = (player.pos.x + cos) as usize;
+        let y = (player.pos.y + sin) as usize;
 
         let i = x / block_size;
         let j = y / block_size;
@@ -36,6 +36,7 @@ pub fn cast_ray(
         }
 
         if draw_line {
+
             framebuffer.point(x, y);
         }
 
