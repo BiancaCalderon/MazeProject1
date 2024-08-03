@@ -2,6 +2,8 @@ use minifb::{Key, Window, WindowOptions};
 use nalgebra_glm::{Vec2};
 use std::time::Duration;
 use std::f32::consts::PI;
+use once_cell::sync::Lazy;
+use std::sync::Arc;
 
 mod framebuffer;
 use framebuffer::Framebuffer;
@@ -14,13 +16,20 @@ use player::{Player, process_events};
 mod caster;
 use caster::{Intersect, cast_ray};
 
-fn cell_to_color(cell: char) -> u32 {
+mod texture;
+use texture::Texture;
+
+static WALL1: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/WALL2.jpg")));
+static WALL2: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/WALL2.jpg")));
+
+fn cell_to_texture_color(cell: char, tx: u32, ty: u32) -> u32 {
     let default_color = 0x000000;
+
     match cell {
-        '+' => 0xFF00FF,
-        '-' => 0xDD11DD,
-        '|' => 0xCC11CC,
-        'g' => 0xFF0000,
+        '+' => WALL1.get_pixel_color(tx,ty),
+        '-' => WALL2.get_pixel_color(tx,ty),
+        '|' => WALL1.get_pixel_color(tx,ty),
+        'g' => WALL2.get_pixel_color(tx,ty),
         _ => default_color,
     }
 }
@@ -30,8 +39,7 @@ fn draw_cell(framebuffer: &mut Framebuffer, xo: usize, yo: usize, block_size:usi
     for x in xo..xo + block_size{
         for y in yo..yo + block_size{
             if cell != ' '{
-                let color = cell_to_color(cell);
-                framebuffer.set_current_color(color);
+                framebuffer.set_current_color(0x000000);
                 framebuffer.point(x,y);
             }
         }
@@ -45,22 +53,39 @@ fn render3d(framebuffer: &mut Framebuffer, player: &Player){
     let num_rays = framebuffer.width; 
     let block_size = 100;
     
+    for i in 0..framebuffer.width{
+        framebuffer.set_current_color(0x383838);
+        for j in 0..(framebuffer.height / 2){
+            framebuffer.point(i, j);
+        }
+        framebuffer.set_current_color(0x717171);
+        for j in (framebuffer.height / 2)..framebuffer.height {
+            framebuffer.point(i, j);
+        }
+    }
+
     let hh = framebuffer.height as f32 / 2.0;
     for i in 0..num_rays {
         let current_ray = (i as f32 / num_rays as f32);
         let a = player.a - (player.fov / 2.0) + (player.fov * current_ray);
         let Intersect = cast_ray(framebuffer, &maze, player, a, block_size, false);
 
-        let stake_height = (framebuffer.height as f32 / Intersect.distance) * 70.0;
+        let distance = Intersect.distance * (a - player.a).cos();
+
+        let stake_height = (framebuffer.height as f32 / distance) * 70.0;
 
         let stake_top = (hh - (stake_height / 2.0)) as usize;
         let stake_bottom = (hh + (stake_height / 2.0)) as usize;
 
         for y in stake_top..stake_bottom{
-            framebuffer.set_current_color(0x33AADD);
+            let ty = (y as f32 - stake_top as f32) / (stake_bottom as f32 - stake_top as f32) *  128.0;
+            let tx = Intersect.tx;
+            let color = cell_to_texture_color(Intersect.impact, tx as u32, ty as u32);
+            framebuffer.set_current_color(color);
             framebuffer.point(i, y);
         }
     }
+
 }
 
 
