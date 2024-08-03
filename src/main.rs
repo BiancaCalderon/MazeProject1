@@ -40,6 +40,29 @@ fn draw_cell(framebuffer: &mut Framebuffer, xo: usize, yo: usize, block_size:usi
 
 }
 
+fn render3d(framebuffer: &mut Framebuffer, player: &Player){
+    let maze = load_maze("./maze.txt");
+    let num_rays = framebuffer.width; 
+    let block_size = 100;
+    
+    let hh = framebuffer.height as f32 / 2.0;
+    for i in 0..num_rays {
+        let current_ray = (i as f32 / num_rays as f32);
+        let a = player.a - (player.fov / 2.0) + (player.fov * current_ray);
+        let Intersect = cast_ray(framebuffer, &maze, player, a, block_size, false);
+
+        let stake_height = (framebuffer.height as f32 / Intersect.distance) * 70.0;
+
+        let stake_top = (hh - (stake_height / 2.0)) as usize;
+        let stake_bottom = (hh + (stake_height / 2.0)) as usize;
+
+        for y in stake_top..stake_bottom{
+            framebuffer.set_current_color(0x33AADD);
+            framebuffer.point(i, y);
+        }
+    }
+}
+
 
 fn render2d(framebuffer: &mut Framebuffer, player: &Player) {
     let maze = load_maze("./maze.txt");
@@ -92,18 +115,27 @@ fn main() {
         a: PI/3.0,
         fov: PI/3.0,
     };
+    let mut mode ="3D"; 
 
     while window.is_open() {
         // listen to inputs
         if window.is_key_down(Key::Escape) {
             break;
         }
+        if window.is_key_down(Key::M){
+            mode = if mode == "2D" {"3D"} else {"2D"};
+        }
 
         process_events(&window, &mut player);
 
         framebuffer.clear();
 
-        render2d(&mut framebuffer, &player);
+        if mode == "2D" {
+            render2d(&mut framebuffer, &player);
+        } else {
+            render3d(&mut framebuffer, &player);
+        }
+
         // Update the window with the framebuffer contents
 window
 .update_with_buffer(&framebuffer.buffer, framebuffer_width, framebuffer_height)
@@ -112,4 +144,4 @@ window
 std::thread::sleep(frame_delay);
 
     }
-}
+ }    
