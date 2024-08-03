@@ -11,6 +11,9 @@ use maze::load_maze;
 mod player;
 use player::Player;
 
+mod caster;
+use caster::{Intersect, cast_ray};
+
 fn cell_to_color(cell: char) -> u32 {
     let default_color = 0x000000;
     match cell {
@@ -48,8 +51,10 @@ fn render2d(framebuffer: &mut Framebuffer, player: &Player) {
 
         }
     }
-    framebuffer.set_current_color(0x000000);
+    framebuffer.set_current_color(0xFFFFFF);
     framebuffer.point(player.pos.x as usize, player.pos.y as usize);
+
+    cast_ray(framebuffer, &maze, player, player.a, block_size, true);
 }
 
 
@@ -79,7 +84,9 @@ fn main() {
     framebuffer.set_background_color(0x333355);
     let player = Player{
         pos: Vec2::new(150.0, 150.0),
+        a: PI/3.0,
     };
+    framebuffer.clear();
 
     while window.is_open() {
         // listen to inputs
