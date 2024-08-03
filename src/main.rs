@@ -9,7 +9,7 @@ mod maze;
 use maze::load_maze;
 
 mod player;
-use player::Player;
+use player::{Player, process_events};
 
 mod caster;
 use caster::{Intersect, cast_ray};
@@ -54,7 +54,12 @@ fn render2d(framebuffer: &mut Framebuffer, player: &Player) {
     framebuffer.set_current_color(0xFFFFFF);
     framebuffer.point(player.pos.x as usize, player.pos.y as usize);
 
-    cast_ray(framebuffer, &maze, player, player.a, block_size, true);
+    let num_rays = 100; 
+    for i in 0..num_rays {
+        let current_ray = (i as f32 / num_rays as f32);
+        let a = player.a - (player.fov / 2.0) + (player.fov * current_ray);
+        cast_ray(framebuffer, &maze, player, a, block_size, true);
+    }
 }
 
 
@@ -82,17 +87,21 @@ fn main() {
     
     // initialize values
     framebuffer.set_background_color(0x333355);
-    let player = Player{
+    let mut player = Player{
         pos: Vec2::new(150.0, 150.0),
         a: PI/3.0,
+        fov: PI/3.0,
     };
-    framebuffer.clear();
 
     while window.is_open() {
         // listen to inputs
         if window.is_key_down(Key::Escape) {
             break;
         }
+
+        process_events(&window, &mut player);
+
+        framebuffer.clear();
 
         render2d(&mut framebuffer, &player);
         // Update the window with the framebuffer contents
