@@ -1,5 +1,5 @@
 use minifb::{Key, Window, WindowOptions, MouseMode};
-use nalgebra_glm::{Vec2};
+use nalgebra_glm::{Vec2, distance};
 use std::f32::consts::PI;
 use once_cell::sync::Lazy;
 use std::sync::Arc;
@@ -22,6 +22,8 @@ use texture::Texture;
 
 // static WALL1: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/WALL2.jpg")));
 
+static ENEMY: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/sprite.png")));
+
 fn cell_to_texture_color(cell: char, tx: u32, ty: u32) -> u32 {
     let wall_color = 0x30822e; // Color verde oscuro para las paredes
     let default_color = 0x000000;
@@ -43,7 +45,7 @@ fn draw_cell(framebuffer: &mut Framebuffer, xo: usize, yo: usize, block_size: us
     }
 }
 
-fn render3d(framebuffer: &mut Framebuffer, player: &Player) {
+fn render3d(framebuffer: &mut Framebuffer, player: &Player, z_buffer: &mut [f32]) {
     let maze = load_maze("./maze.txt");
     let num_rays = framebuffer.width;
     let block_size = 100;
@@ -70,6 +72,8 @@ fn render3d(framebuffer: &mut Framebuffer, player: &Player) {
         let stake_top = (hh - (stake_height / 2.0)) as usize;
         let stake_bottom = (hh + (stake_height / 2.0)) as usize;
 
+        z_buffer[i] = distance;
+    
         for y in stake_top..stake_bottom {
             let ty = (y as f32 - stake_top as f32) / (stake_bottom as f32 - stake_top as f32) * 128.0;
             let tx = Intersect.tx;
@@ -157,6 +161,64 @@ fn render_minimap(framebuffer: &mut Framebuffer, player: &Player) {
     }
 }
 
+fn render_enemy(framebuffer: &mut Framebuffer, player: &Player, pos: &Vec2, z_buffer: &mut [f32]) {
+    // player_a
+    let sprite_a = (pos.y - player.pos.y).atan2(pos.x - player.pos.x);
+    // let sprite_a = - player.a;
+    //
+    if sprite_a < 0.0 {
+      return;
+    }
+  
+    let sprite_d = ((player.pos.x - pos.x).powi(2) + (player.pos.y - pos.y).powi(2)).sqrt();
+    // let sprite_d = distance(player.pos, pos);
+  
+    if sprite_d < 10.0 {
+      return;
+    }
+  
+    let screen_height = framebuffer.height as f32;
+    let screen_width = framebuffer.width as f32;
+  
+    let sprite_size = (screen_height / sprite_d) * 100.0;
+    let start_x = (sprite_a - player.a) * (screen_height / player.fov) + (screen_width / 2.0) - (sprite_size / 2.0);
+    let start_y = (screen_height / 2.0) - (sprite_size / 2.0);
+  
+    let end_x = ((start_x + sprite_size) as usize).min(framebuffer.width);
+    let end_y = ((start_y + sprite_size) as usize).min(framebuffer.height);
+    let start_x = start_x.max(0.0) as usize;
+    let start_y = start_y.max(0.0) as usize;
+  
+    if end_x <= 0 {
+      return;
+    }
+  
+    if start_x < framebuffer.width && sprite_d < z_buffer[start_x] {
+      for x in start_x..(end_x - 1) {
+        for y in start_y..(end_y - 1) {
+          let tx = ((x - start_x) * 128 / sprite_size as usize) as u32;
+          let ty = ((y - start_y) * 128 / sprite_size as usize) as u32;
+          let color = ENEMY.get_pixel_color(tx, ty);
+          if color != 0x3a4041 { 
+            framebuffer.set_current_color(color);
+            framebuffer.point(x, y);
+          }
+          z_buffer[x] = sprite_d;
+        }
+      }
+    }
+  }
+  
+  fn render_enemies(framebuffer: &mut Framebuffer, player: &Player, z_buffer: &mut [f32]) {
+    let enemies = vec![
+      Vec2::new(250.0, 250.0),
+      Vec2::new(250.0, 550.0),
+    ];
+  
+    for enemy in &enemies {
+      render_enemy(framebuffer, &player, enemy, z_buffer);
+    }
+  }
 
 fn main() {
     let window_width = 1400;
@@ -222,7 +284,9 @@ fn main() {
         if mode == "2D" {
             render2d(&mut framebuffer, &player);
         } else {
-            render3d(&mut framebuffer, &player);
+            let mut z_buffer = vec![f32::INFINITY; framebuffer.width];
+            render3d(&mut framebuffer, &player, &mut z_buffer);
+            render_enemies(&mut framebuffer, &player, &mut z_buffer);
         }
 
         // Renderizar el minimapa
