@@ -1,11 +1,10 @@
-use minifb::{Key, Window, WindowOptions};
+use minifb::{Key, Window, WindowOptions, MouseMode};
 use nalgebra_glm::{Vec2};
 use std::f32::consts::PI;
 use once_cell::sync::Lazy;
 use std::sync::Arc;
 use std::time::{Instant, Duration};
 use rusttype::Scale;
-
 
 mod framebuffer;
 use framebuffer::Framebuffer;
@@ -21,41 +20,37 @@ use caster::{Intersect, cast_ray};
 mod texture;
 use texture::Texture;
 
-//static WALL1: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/WALL2.jpg")));
+// static WALL1: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/WALL2.jpg")));
 
 fn cell_to_texture_color(cell: char, tx: u32, ty: u32) -> u32 {
-    let wall_color = 0x30822e;
+    let wall_color = 0x30822e; // Color verde oscuro para las paredes
     let default_color = 0x000000;
 
     match cell {
-        '+' => wall_color,
-        '-' => wall_color,
-        '|' => wall_color,
-        'g' => wall_color,
+        '+' | '-' | '|' | 'g' => wall_color,
         _ => default_color,
     }
 }
 
-fn draw_cell(framebuffer: &mut Framebuffer, xo: usize, yo: usize, block_size:usize, cell: char) {
+fn draw_cell(framebuffer: &mut Framebuffer, xo: usize, yo: usize, block_size: usize, cell: char) {
+    let color = if cell != ' ' { 0x30822e } else { 0x000000 }; // Color verde oscuro para las paredes, negro para espacios vacíos
 
-    for x in xo..xo + block_size{
-        for y in yo..yo + block_size{
-            if cell != ' '{
-                framebuffer.set_current_color(0x000000);
-                framebuffer.point(x,y);
-            }
+    for x in xo..xo + block_size {
+        for y in yo..yo + block_size {
+            framebuffer.set_current_color(color);
+            framebuffer.point(x, y);
         }
     }
 }
 
-fn render3d(framebuffer: &mut Framebuffer, player: &Player){
+fn render3d(framebuffer: &mut Framebuffer, player: &Player) {
     let maze = load_maze("./maze.txt");
-    let num_rays = framebuffer.width; 
+    let num_rays = framebuffer.width;
     let block_size = 100;
-    
-    for i in 0..framebuffer.width{
+
+    for i in 0..framebuffer.width {
         framebuffer.set_current_color(0x383838);
-        for j in 0..(framebuffer.height / 2){
+        for j in 0..(framebuffer.height / 2) {
             framebuffer.point(i, j);
         }
         framebuffer.set_current_color(0x717171);
@@ -77,39 +72,35 @@ fn render3d(framebuffer: &mut Framebuffer, player: &Player){
         let stake_top = (hh - (stake_height / 2.0)) as usize;
         let stake_bottom = (hh + (stake_height / 2.0)) as usize;
 
-        for y in stake_top..stake_bottom{
-            let ty = (y as f32 - stake_top as f32) / (stake_bottom as f32 - stake_top as f32) *  128.0;
+        for y in stake_top..stake_bottom {
+            let ty = (y as f32 - stake_top as f32) / (stake_bottom as f32 - stake_top as f32) * 128.0;
             let tx = Intersect.tx;
             let color = cell_to_texture_color(Intersect.impact, tx as u32, ty as u32);
             framebuffer.set_current_color(color);
             framebuffer.point(i, y);
         }
     }
-
 }
-
 
 fn render2d(framebuffer: &mut Framebuffer, player: &Player) {
     let maze = load_maze("./maze.txt");
     let block_size = 100;
 
-    for row in 0..maze.len(){
-        for col in 0..maze[row].len(){
-            draw_cell(framebuffer, col * block_size, row * block_size,block_size, maze[row][col]);
-
+    for row in 0..maze.len() {
+        for col in 0..maze[row].len() {
+            draw_cell(framebuffer, col * block_size, row * block_size, block_size, maze[row][col]);
         }
     }
     framebuffer.set_current_color(0xFFFFFF);
     framebuffer.point(player.pos.x as usize, player.pos.y as usize);
 
-    let num_rays = 100; 
+    let num_rays = 100;
     for i in 0..num_rays {
         let current_ray = (i as f32 / num_rays as f32);
         let a = player.a - (player.fov / 2.0) + (player.fov * current_ray);
         cast_ray(framebuffer, &maze, player, a, block_size, true);
     }
 }
-
 
 fn main() {
     let window_width = 1300;
@@ -149,6 +140,7 @@ fn main() {
     let mut last_time = Instant::now();
     let mut frame_count = 0;
     let mut fps_text = String::new();
+    let mut last_mouse_x = window.get_mouse_pos(MouseMode::Clamp).unwrap_or((0.0, 0.0)).0;
 
     while window.is_open() {
         // Escucha de inputs
@@ -157,6 +149,13 @@ fn main() {
         }
         if window.is_key_down(Key::M) {
             mode = if mode == "2D" { "3D" } else { "2D" };
+        }
+
+        // Captura del movimiento del mouse
+        if let Some((mouse_x, _)) = window.get_mouse_pos(MouseMode::Clamp) {
+            let mouse_delta_x = mouse_x - last_mouse_x;
+            player.a += mouse_delta_x * 0.005; // Cambiado a suma para invertir la rotación
+            last_mouse_x = mouse_x;
         }
 
         // Procesar eventos
