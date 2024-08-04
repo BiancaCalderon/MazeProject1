@@ -9,7 +9,7 @@ pub struct Player{
 
 pub fn process_events(window: &Window, player: &mut Player, maze: &Vec<Vec<char>>, block_size: usize) {
     const MOVE_SPEED: f32 = 10.0;
-    const ROTATION_SPEED: f32 = 3.14 / 70.0;
+    const ROTATION_SPEED: f32 = 3.14 / 50.0;
 
     let mut new_pos = player.pos;
 

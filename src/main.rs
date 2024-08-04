@@ -1,9 +1,11 @@
 use minifb::{Key, Window, WindowOptions};
 use nalgebra_glm::{Vec2};
-use std::time::Duration;
 use std::f32::consts::PI;
 use once_cell::sync::Lazy;
 use std::sync::Arc;
+use std::time::{Instant, Duration};
+use rusttype::Scale;
+
 
 mod framebuffer;
 use framebuffer::Framebuffer;
@@ -19,17 +21,17 @@ use caster::{Intersect, cast_ray};
 mod texture;
 use texture::Texture;
 
-static WALL1: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/WALL2.jpg")));
-static WALL2: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/WALL2.jpg")));
+//static WALL1: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/WALL2.jpg")));
 
 fn cell_to_texture_color(cell: char, tx: u32, ty: u32) -> u32 {
+    let wall_color = 0x30822e;
     let default_color = 0x000000;
 
     match cell {
-        '+' => WALL1.get_pixel_color(tx,ty),
-        '-' => WALL2.get_pixel_color(tx,ty),
-        '|' => WALL1.get_pixel_color(tx,ty),
-        'g' => WALL2.get_pixel_color(tx,ty),
+        '+' => wall_color,
+        '-' => wall_color,
+        '|' => wall_color,
+        'g' => wall_color,
         _ => default_color,
     }
 }
@@ -44,8 +46,6 @@ fn draw_cell(framebuffer: &mut Framebuffer, xo: usize, yo: usize, block_size:usi
             }
         }
     }
-
-
 }
 
 fn render3d(framebuffer: &mut Framebuffer, player: &Player){
@@ -132,27 +132,31 @@ fn main() {
     // Mueve la ventana
     window.set_position(100, 100);
     window.update();
-    
+
     // Inicializa valores
     framebuffer.set_background_color(0x333355);
-    let mut player = Player{
+    let mut player = Player {
         pos: Vec2::new(150.0, 150.0),
-        a: PI/3.0,
-        fov: PI/3.0,
+        a: PI / 3.0,
+        fov: PI / 3.0,
     };
-    let mut mode = "3D"; 
+    let mut mode = "3D";
 
     // Cargar el laberinto y definir block_size
     let maze = load_maze("./maze.txt");
     let block_size = 100;
+
+    let mut last_time = Instant::now();
+    let mut frame_count = 0;
+    let mut fps_text = String::new();
 
     while window.is_open() {
         // Escucha de inputs
         if window.is_key_down(Key::Escape) {
             break;
         }
-        if window.is_key_down(Key::M){
-            mode = if mode == "2D" {"3D"} else {"2D"};
+        if window.is_key_down(Key::M) {
+            mode = if mode == "2D" { "3D" } else { "2D" };
         }
 
         // Procesar eventos
@@ -166,11 +170,26 @@ fn main() {
             render3d(&mut framebuffer, &player);
         }
 
+        // Calcular FPS
+        frame_count += 1;
+        let current_time = Instant::now();
+        let elapsed = current_time.duration_since(last_time);
+
+        if elapsed >= Duration::from_secs(1) {
+            let fps = (frame_count as f64 / elapsed.as_secs_f64()).round() as u64;
+            fps_text = format!("FPS: {}", fps);
+            last_time = current_time;
+            frame_count = 0;
+        }
+
+        // Dibujar el texto de FPS en cada frame
+        framebuffer.draw_text(&fps_text, 10, 10, Scale::uniform(32.0), 0xFFFFFF);
+
         // Actualiza la ventana con el contenido del framebuffer
         window
             .update_with_buffer(&framebuffer.buffer, framebuffer_width, framebuffer_height)
             .unwrap();
 
-        std::thread::sleep(frame_delay);
+        std::thread::sleep(Duration::from_millis(16));
     }
 }
