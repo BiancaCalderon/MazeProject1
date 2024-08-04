@@ -129,21 +129,25 @@ fn main() {
         WindowOptions::default(),
     ).unwrap();
 
-    // move the window around
+    // Mueve la ventana
     window.set_position(100, 100);
     window.update();
     
-    // initialize values
+    // Inicializa valores
     framebuffer.set_background_color(0x333355);
     let mut player = Player{
         pos: Vec2::new(150.0, 150.0),
         a: PI/3.0,
         fov: PI/3.0,
     };
-    let mut mode ="3D"; 
+    let mut mode = "3D"; 
+
+    // Cargar el laberinto y definir block_size
+    let maze = load_maze("./maze.txt");
+    let block_size = 100;
 
     while window.is_open() {
-        // listen to inputs
+        // Escucha de inputs
         if window.is_key_down(Key::Escape) {
             break;
         }
@@ -151,7 +155,8 @@ fn main() {
             mode = if mode == "2D" {"3D"} else {"2D"};
         }
 
-        process_events(&window, &mut player);
+        // Procesar eventos
+        process_events(&window, &mut player, &maze, block_size);
 
         framebuffer.clear();
 
@@ -161,12 +166,11 @@ fn main() {
             render3d(&mut framebuffer, &player);
         }
 
-        // Update the window with the framebuffer contents
-window
-.update_with_buffer(&framebuffer.buffer, framebuffer_width, framebuffer_height)
-.unwrap();
+        // Actualiza la ventana con el contenido del framebuffer
+        window
+            .update_with_buffer(&framebuffer.buffer, framebuffer_width, framebuffer_height)
+            .unwrap();
 
-std::thread::sleep(frame_delay);
-
+        std::thread::sleep(frame_delay);
     }
- }    
+}
