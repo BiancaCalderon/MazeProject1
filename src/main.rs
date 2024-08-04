@@ -33,12 +33,12 @@ fn cell_to_texture_color(cell: char, tx: u32, ty: u32) -> u32 {
 }
 
 fn draw_cell(framebuffer: &mut Framebuffer, xo: usize, yo: usize, block_size: usize, cell: char) {
-    let color = if cell != ' ' { 0x30822e } else { 0x000000 }; // Color verde oscuro para las paredes, negro para espacios vacíos
-
     for x in xo..xo + block_size {
         for y in yo..yo + block_size {
-            framebuffer.set_current_color(color);
-            framebuffer.point(x, y);
+            if cell != ' ' {
+                framebuffer.set_current_color(0x000000);
+                framebuffer.point(x, y);
+            }
         }
     }
 }
@@ -66,9 +66,7 @@ fn render3d(framebuffer: &mut Framebuffer, player: &Player) {
         let Intersect = cast_ray(framebuffer, &maze, player, a, block_size, false);
 
         let distance = Intersect.distance * (a - player.a).cos();
-
         let stake_height = (framebuffer.height as f32 / distance) * 70.0;
-
         let stake_top = (hh - (stake_height / 2.0)) as usize;
         let stake_bottom = (hh + (stake_height / 2.0)) as usize;
 
@@ -102,8 +100,66 @@ fn render2d(framebuffer: &mut Framebuffer, player: &Player) {
     }
 }
 
+fn render_minimap(framebuffer: &mut Framebuffer, player: &Player) {
+    let minimap_size = 200; // Tamaño del minimapa
+    let minimap_x = framebuffer.width - minimap_size - 100; // Posición X del minimapa
+    let minimap_y = framebuffer.height - minimap_size - 10; // Posición Y del minimapa
+
+    // Asegúrate de que el minimapa esté dentro de los límites del framebuffer
+    if minimap_x < 0 || minimap_y < 0 {
+        return; // No dibujar si el minimapa está fuera del framebuffer
+    }
+
+    // Dibujar el fondo del minimapa
+    framebuffer.set_current_color(0x222222); // Color oscuro para el fondo del minimapa
+    for x in minimap_x..minimap_x + minimap_size {
+        for y in minimap_y..minimap_y + minimap_size {
+            if x < framebuffer.width && y < framebuffer.height {
+                framebuffer.point(x, y);
+            }
+        }
+    }
+
+    // Cargar el laberinto
+    let maze = load_maze("./maze.txt");
+    let block_size = 100; // Tamaño del bloque del mapa
+    let scale = minimap_size as f32 / (maze.len() as f32 * block_size as f32);
+
+    // Dibujar el laberinto en el minimapa
+    for row in 0..maze.len() {
+        for col in 0..maze[row].len() {
+            let cell_x = (col as f32 * block_size as f32 * scale) as usize;
+            let cell_y = (row as f32 * block_size as f32 * scale) as usize;
+            let mini_block_size = (block_size as f32 * scale) as usize;
+
+            // Asegúrate de que las celdas del laberinto no se dibujen fuera de los límites del minimapa
+            for dx in 0..mini_block_size {
+                for dy in 0..mini_block_size {
+                    let x = minimap_x + cell_x + dx;
+                    let y = minimap_y + cell_y + dy;
+                    if x < framebuffer.width && y < framebuffer.height {
+                        framebuffer.set_current_color(cell_to_texture_color(maze[row][col], 0, 0));
+                        framebuffer.point(x, y);
+                    }
+                }
+            }
+        }
+    }
+
+    // Dibujar la posición del jugador en el minimapa
+    framebuffer.set_current_color(0xFF0000); // Color rojo para el jugador
+    let player_x = (player.pos.x as f32 * scale) as usize;
+    let player_y = (player.pos.y as f32 * scale) as usize;
+
+    // Asegúrate de que la posición del jugador esté dentro del minimapa
+    if minimap_x + player_x < framebuffer.width && minimap_y + player_y < framebuffer.height {
+        framebuffer.point(minimap_x + player_x, minimap_y + player_y);
+    }
+}
+
+
 fn main() {
-    let window_width = 1300;
+    let window_width = 1400;
     let window_height = 900;
 
     let framebuffer_width = 1300;
@@ -168,6 +224,9 @@ fn main() {
         } else {
             render3d(&mut framebuffer, &player);
         }
+
+        // Renderizar el minimapa
+        render_minimap(&mut framebuffer, &player);
 
         // Calcular FPS
         frame_count += 1;
