@@ -5,6 +5,8 @@ use once_cell::sync::Lazy;
 use std::sync::Arc;
 use std::time::{Instant, Duration};
 use rusttype::Scale;
+use rodio::{Source, Decoder, OutputStream, OutputStreamHandle, Sink};
+use std::fs::File;
 
 mod framebuffer;
 use framebuffer::Framebuffer;
@@ -19,6 +21,9 @@ use caster::{Intersect, cast_ray};
 
 mod texture;
 use texture::Texture;
+
+mod audio;
+use audio::AudioPlayer;
 
 // static WALL1: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/WALL2.jpg")));
 
@@ -230,6 +235,7 @@ fn main() {
     let frame_delay = Duration::from_millis(0);
 
     let mut framebuffer = Framebuffer::new(framebuffer_width, framebuffer_height);
+    let audio_player = AudioPlayer::new("assets/audio1.mp3");
 
     let mut window = Window::new(
         "Rust Graphics - Maze Example",
@@ -313,5 +319,9 @@ fn main() {
             .unwrap();
 
         std::thread::sleep(Duration::from_millis(16));
+
+        if window.is_key_pressed(Key::Space, minifb::KeyRepeat::No) {
+            audio_player.play();
+        }
     }
 }
