@@ -5,8 +5,6 @@ use once_cell::sync::Lazy;
 use std::sync::Arc;
 use std::time::{Instant, Duration};
 use rusttype::Scale;
-use rodio::{Source, Decoder, OutputStream, OutputStreamHandle, Sink};
-use std::fs::File;
 
 mod framebuffer;
 use framebuffer::Framebuffer;
@@ -22,19 +20,16 @@ use caster::{Intersect, cast_ray};
 mod texture;
 use texture::Texture;
 
-mod audio;
-use audio::AudioPlayer;
-
-// static WALL1: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/WALL2.jpg")));
+static WALL2: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/WALL2.jpg")));
 
 static ENEMY: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/sprite.png")));
 
 fn cell_to_texture_color(cell: char, tx: u32, ty: u32) -> u32 {
-    let wall_color = 0x30822e; // Color verde oscuro para las paredes
+    //let wall_color = 0x30822e; // Color verde oscuro para las paredes
     let default_color = 0x000000;
 
     match cell {
-        '+' | '-' | '|' | 'g' => wall_color,
+        '+' | '-' | '|' | 'g' => WALL2.get_pixel_color(tx, ty),
         _ => default_color,
     }
 }
@@ -42,13 +37,16 @@ fn cell_to_texture_color(cell: char, tx: u32, ty: u32) -> u32 {
 fn draw_cell(framebuffer: &mut Framebuffer, xo: usize, yo: usize, block_size: usize, cell: char) {
     for x in xo..xo + block_size {
         for y in yo..yo + block_size {
-            if cell != ' ' {
-                framebuffer.set_current_color(0x000000);
-                framebuffer.point(x, y);
-            }
+            let color = match cell {
+                'g' => 0xFF0000, // Rojo para la salida
+                _ => 0x000000,   // Negro para otras celdas
+            };
+            framebuffer.set_current_color(color);
+            framebuffer.point(x, y);
         }
     }
 }
+
 
 fn render3d(framebuffer: &mut Framebuffer, player: &Player, z_buffer: &mut [f32]) {
     let maze = load_maze("./maze.txt");
@@ -147,7 +145,12 @@ fn render_minimap(framebuffer: &mut Framebuffer, player: &Player) {
                     let x = minimap_x + cell_x + dx;
                     let y = minimap_y + cell_y + dy;
                     if x < framebuffer.width && y < framebuffer.height {
-                        framebuffer.set_current_color(cell_to_texture_color(maze[row][col], 0, 0));
+                        let color = if maze[row][col] == 'g' {
+                            0xFF0000 // Rojo para la salida
+                        } else {
+                            cell_to_texture_color(maze[row][col], 0, 0)
+                        };
+                        framebuffer.set_current_color(color);
                         framebuffer.point(x, y);
                     }
                 }
@@ -225,6 +228,37 @@ fn render_enemy(framebuffer: &mut Framebuffer, player: &Player, pos: &Vec2, z_bu
     }
   }
 
+  fn has_won(player: &Player, goal_position: &Vec2, block_size: usize) -> bool {
+    let player_block_x = (player.pos.x / block_size as f32).round() as usize;
+    let player_block_y = (player.pos.y / block_size as f32).round() as usize;
+    let goal_block_x = (goal_position.x / block_size as f32).round() as usize;
+    let goal_block_y = (goal_position.y / block_size as f32).round() as usize;
+
+    player_block_x == goal_block_x && player_block_y == goal_block_y
+}
+
+
+fn draw_victory_screen(framebuffer: &mut Framebuffer) {
+    framebuffer.set_background_color(0x000000); // Fondo negro
+    framebuffer.set_current_color(0x00FF00);    // Texto verde
+    framebuffer.draw_text("¡Felicidades! Has completado el nivel.", 100, framebuffer.height / 2, Scale::uniform(48.0), 0x00FF00);
+    framebuffer.draw_text("Presiona Esc para salir.", 100, framebuffer.height / 2 + 60, Scale::uniform(32.0), 0x00FF00);
+}
+
+fn get_goal_position(maze: &[Vec<char>], block_size: usize) -> Vec2 {
+    let mut goal_position = Vec2::new(0.0, 0.0);
+    for (row_idx, row) in maze.iter().enumerate() {
+        for (col_idx, &cell) in row.iter().enumerate() {
+            if cell == 'g' {
+                goal_position = Vec2::new(col_idx as f32 * block_size as f32, row_idx as f32 * block_size as f32);
+                return goal_position;
+            }
+        }
+    }
+    goal_position
+}
+
+
 fn main() {
     let window_width = 1400;
     let window_height = 900;
@@ -235,7 +269,6 @@ fn main() {
     let frame_delay = Duration::from_millis(0);
 
     let mut framebuffer = Framebuffer::new(framebuffer_width, framebuffer_height);
-    let audio_player = AudioPlayer::new("assets/audio1.mp3");
 
     let mut window = Window::new(
         "Rust Graphics - Maze Example",
@@ -261,10 +294,15 @@ fn main() {
     let maze = load_maze("./maze.txt");
     let block_size = 100;
 
+    let goal_position = get_goal_position(&maze, block_size);
+
     let mut last_time = Instant::now();
     let mut frame_count = 0;
     let mut fps_text = String::new();
     let mut last_mouse_x = window.get_mouse_pos(MouseMode::Clamp).unwrap_or((0.0, 0.0)).0;
+
+    // Manejo de pantallas
+    let mut screen = "menu";
 
     while window.is_open() {
         // Escucha de inputs
@@ -275,28 +313,47 @@ fn main() {
             mode = if mode == "2D" { "3D" } else { "2D" };
         }
 
-        // Captura del movimiento del mouse
-        if let Some((mouse_x, _)) = window.get_mouse_pos(MouseMode::Clamp) {
-            let mouse_delta_x = mouse_x - last_mouse_x;
-            player.a += mouse_delta_x * 0.005; // Cambiado a suma para invertir la rotación
-            last_mouse_x = mouse_x;
-        }
-
-        // Procesar eventos
-        process_events(&window, &mut player, &maze, block_size);
-
         framebuffer.clear();
 
-        if mode == "2D" {
-            render2d(&mut framebuffer, &player);
-        } else {
-            let mut z_buffer = vec![f32::INFINITY; framebuffer.width];
-            render3d(&mut framebuffer, &player, &mut z_buffer);
-            render_enemies(&mut framebuffer, &player, &mut z_buffer);
-        }
+        match screen {
+            "menu" => {
+                framebuffer.draw_text("Presiona ENTER para comenzar", 400, 450, Scale::uniform(32.0), 0xFFFFFF);
+                if window.is_key_down(Key::Enter) {
+                    screen = "game";
+                }
+            },
+            "game" => {
+                // Captura del movimiento del mouse
+                if let Some((mouse_x, _)) = window.get_mouse_pos(MouseMode::Clamp) {
+                    let mouse_delta_x = mouse_x - last_mouse_x;
+                    player.a += mouse_delta_x * 0.005; // Cambiado a suma para invertir la rotación
+                    last_mouse_x = mouse_x;
+                }
 
-        // Renderizar el minimapa
-        render_minimap(&mut framebuffer, &player);
+                // Procesar eventos
+                process_events(&window, &mut player, &maze, block_size);
+
+                if mode == "2D" {
+                    render2d(&mut framebuffer, &player);
+                } else {
+                    let mut z_buffer = vec![f32::INFINITY; framebuffer.width];
+                    render3d(&mut framebuffer, &player, &mut z_buffer);
+                    render_enemies(&mut framebuffer, &player, &mut z_buffer);
+                }
+
+                // Renderizar el minimapa
+                render_minimap(&mut framebuffer, &player);
+
+                // Verificar condición de victoria
+                if has_won(&player, &goal_position, block_size) {
+                    screen = "win";
+                }
+            },
+            "win" => {
+                draw_victory_screen(&mut framebuffer);
+            },
+            _ => {},
+        }
 
         // Calcular FPS
         frame_count += 1;
@@ -319,9 +376,5 @@ fn main() {
             .unwrap();
 
         std::thread::sleep(Duration::from_millis(16));
-
-        if window.is_key_pressed(Key::Space, minifb::KeyRepeat::No) {
-            audio_player.play();
-        }
     }
 }
