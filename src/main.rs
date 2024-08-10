@@ -20,9 +20,17 @@ use caster::{Intersect, cast_ray};
 mod texture;
 use texture::Texture;
 
+mod audio;
+use audio::AudioPlayer;
+
 static WALL2: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/WALL2.jpg")));
 
 static ENEMY: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/sprite.png")));
+
+static SKY: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/sky1.png")));
+
+static GRASS: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("assets/grass.png")));
+
 
 fn cell_to_texture_color(cell: char, tx: u32, ty: u32) -> u32 {
     //let wall_color = 0x30822e; // Color verde oscuro para las paredes
@@ -53,18 +61,31 @@ fn render3d(framebuffer: &mut Framebuffer, player: &Player, z_buffer: &mut [f32]
     let num_rays = framebuffer.width;
     let block_size = 100;
 
-    for i in 0..framebuffer.width {
-        framebuffer.set_current_color(0x383838);
+    // Dibujar el fondo con texturas
+    let hh = framebuffer.height as f32 / 2.0;
+
+    // Dibujar la textura del cielo en la mitad superior
+    for i in 0..num_rays {
         for j in 0..(framebuffer.height / 2) {
-            framebuffer.point(i, j);
-        }
-        framebuffer.set_current_color(0x717171);
-        for j in (framebuffer.height / 2)..framebuffer.height {
+            let tx = (i as f32 / num_rays as f32 * SKY.width as f32) as u32;
+            let ty = (j as f32 / (framebuffer.height / 2) as f32 * SKY.height as f32) as u32;
+            let color = SKY.get_pixel_color(tx, ty);
+            framebuffer.set_current_color(color);
             framebuffer.point(i, j);
         }
     }
 
-    let hh = framebuffer.height as f32 / 2.0;
+    // Dibujar la textura del suelo en la mitad inferior
+    for i in 0..num_rays {
+        for j in (framebuffer.height / 2)..framebuffer.height {
+            let tx = (i as f32 / num_rays as f32 * GRASS.width as f32) as u32;
+            let ty = ((j - framebuffer.height / 2) as f32 / (framebuffer.height / 2) as f32 * GRASS.height as f32) as u32;
+            let color = GRASS.get_pixel_color(tx, ty);
+            framebuffer.set_current_color(color);
+            framebuffer.point(i, j);
+        }
+    }
+
     for i in 0..num_rays {
         let current_ray = (i as f32 / num_rays as f32);
         let a = player.a - (player.fov / 2.0) + (player.fov * current_ray);
@@ -80,12 +101,17 @@ fn render3d(framebuffer: &mut Framebuffer, player: &Player, z_buffer: &mut [f32]
         for y in stake_top..stake_bottom {
             let ty = (y as f32 - stake_top as f32) / (stake_bottom as f32 - stake_top as f32) * 128.0;
             let tx = Intersect.tx;
-            let color = cell_to_texture_color(Intersect.impact, tx as u32, ty as u32);
+            let color = if Intersect.impact == 'g' {
+                0x4c9141 // Verde para la salida
+            } else {
+                cell_to_texture_color(Intersect.impact, tx as u32, ty as u32)
+            };
             framebuffer.set_current_color(color);
             framebuffer.point(i, y);
         }
     }
 }
+
 
 fn render2d(framebuffer: &mut Framebuffer, player: &Player) {
     let maze = load_maze("./maze.txt");
@@ -300,6 +326,8 @@ fn main() {
     let mut frame_count = 0;
     let mut fps_text = String::new();
     let mut last_mouse_x = window.get_mouse_pos(MouseMode::Clamp).unwrap_or((0.0, 0.0)).0;
+
+    let audio_player = AudioPlayer::new("assets/audio1.mp3");
 
     // Manejo de pantallas
     let mut screen = "menu";
