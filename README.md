@@ -14,3 +14,7 @@ Este es un proyecto de juego en Rust que combina elementos en 2D y 3D. El juego 
 - [Rust](https://www.rust-lang.org/) - Asegúrate de tener la última versión instalada.
 - [Cargo](https://doc.rust-lang.org/cargo/) - El sistema de compilación y gestor de paquetes de Rust.
 
+
+
+https://github.com/user-attachments/assets/31b85e98-b891-42df-a5a0-fa658ccf3ddb
+
