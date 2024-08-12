@@ -286,10 +286,10 @@ fn get_goal_position(maze: &[Vec<char>], block_size: usize) -> Vec2 {
 
 
 fn main() {
-    let window_width = 1400;
+    let window_width = 1200;
     let window_height = 900;
 
-    let framebuffer_width = 1300;
+    let framebuffer_width = 1200;
     let framebuffer_height = 900;
 
     let frame_delay = Duration::from_millis(0);
@@ -313,7 +313,10 @@ fn main() {
         pos: Vec2::new(150.0, 150.0),
         a: PI / 3.0,
         fov: PI / 3.0,
+        velocity: Vec2::new(0.0, 0.0), // Inicializando velocity
+        previous_mouse_pos: Vec2::new(0.0, 0.0), // Inicializando previous_mouse_pos
     };
+    
     let mut mode = "3D";
 
     // Cargar el laberinto y definir block_size
@@ -327,7 +330,11 @@ fn main() {
     let mut fps_text = String::new();
     let mut last_mouse_x = window.get_mouse_pos(MouseMode::Clamp).unwrap_or((0.0, 0.0)).0;
 
-    let audio_player = AudioPlayer::new("assets/audio1.mp3");
+    let audio_player = AudioPlayer::new("assets/audio1.mp3").expect("Failed when initializing AudioPlayer");
+    audio_player.play();
+
+    let walking_player = AudioPlayer::new("assets/steps.mp3").expect("Failed when initializing AudioPlayer");
+    walking_player.set_volume(0.5);
 
     // Manejo de pantallas
     let mut screen = "menu";
@@ -340,6 +347,8 @@ fn main() {
         if window.is_key_down(Key::M) {
             mode = if mode == "2D" { "3D" } else { "2D" };
         }
+
+        process_events(&window, &mut player, &maze, block_size, &walking_player); 
 
         framebuffer.clear();
 
@@ -359,7 +368,8 @@ fn main() {
                 }
 
                 // Procesar eventos
-                process_events(&window, &mut player, &maze, block_size);
+                process_events(&window, &mut player, &maze, block_size, &walking_player);
+
 
                 if mode == "2D" {
                     render2d(&mut framebuffer, &player);
